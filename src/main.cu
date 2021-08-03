@@ -5,43 +5,87 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL2_gfxPrimitives.h>
 #include <cuda_runtime.h>
+#include "main.h"
+
+#define USE_CUDA true
+#define SAVE_OUTPUT false
+#define MAX_STEP 2000
 
 using namespace std;
 
-#define SCREEN_WIDTH 512
-#define SCREEN_HEIGHT 512
-#define N SCREEN_HEIGHT * SCREEN_WIDTH
-#define PI 3.14159265
-#define g 1.0
-#define drag 0.9999
+int main(){
 
-#define USE_CUDA true
+    SDL_Window* window = NULL;
+    SDL_Renderer* renderer = NULL;
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        fprintf(stderr, "could not initialize sdl2: %s\n", SDL_GetError());
+        return 1;
+    }
+    if(SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)){
+        return 3;
+    }
+    if (window == NULL) {
+        fprintf(stderr, "could not create window: %s\n", SDL_GetError());
+        return 1;
+    }
+    bool run = true;
+    SDL_Event event;
+
+    Pendulum *pendulums = (Pendulum*)malloc(N * sizeof(Pendulum));
+    Pendulum *d_pendulums;
 
 
-class Pendulum {
-    public:
-        float r1 = 200;
-        float r2 = 200;
-        float m1 = 20;
-        float m2 = 20;
-        float x0 = SCREEN_WIDTH/2;
-        float y0 = 30;
-        float x1 = 0;
-        float y1 = 0;
-        float x2 = 0; 
-        float y2 = 0;
-        float o1 = 0;
-        float o2 = 0;
-        float o1_v = 0;
-        float o2_v = 0;
-        float o1_a = 0;
-        float o2_a = 0;
+    for (int i = 0; i < N; i++) {
+        int x = i % SCREEN_WIDTH;
+        int y = i / SCREEN_WIDTH;
+        pendulums[i] = Pendulum(
+            (x - SCREEN_WIDTH/2) * 2 * PI / SCREEN_WIDTH, 
+            (y - SCREEN_HEIGHT/2) * 2 * PI / SCREEN_HEIGHT
+        );
+    }
+    int blockSize, gridSize;
+    if (USE_CUDA) {
+        cudaMalloc(&d_pendulums, N * sizeof(Pendulum));
+        blockSize = 1024;
+        gridSize = (int)ceil((float)(N/blockSize));
+        cudaMemcpy(d_pendulums, pendulums, N * sizeof(Pendulum), cudaMemcpyHostToDevice);
+    }
 
-        Pendulum(float o1, float o2) {
-            this->o1 = o1;
-            this->o2 = o2;
+    int step = 0;
+    while(run && step < MAX_STEP){
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
+
+        if (USE_CUDA) {
+            computeAccelerationsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
+            updatePendulumsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
+            cudaMemcpy(pendulums, d_pendulums, N * sizeof(Pendulum), cudaMemcpyDeviceToHost);
+        } else {
+            for (int i = 0; i < N; i++) {
+                computeAccelerations(&pendulums[i]);
+                updatePendulums(&pendulums[i]);
+            }
         }
-};
+
+        //computePositions(&pendulums[12300]);
+        //drawPendulum(&pendulums[12300], renderer);
+        drawFractal(pendulums, renderer);
+        SDL_RenderPresent(renderer);
+        if(SDL_PollEvent(&event) && event.type == SDL_QUIT){
+            run = false;
+        }
+
+        if (SAVE_OUTPUT){
+            saveScreenshot(step, renderer);
+        }
+        step++;
+    }
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    free(pendulums);
+    cudaFree(d_pendulums);
+    return 0;
+}
 
 void computePositions(Pendulum *pendulum) {
     pendulum->x1 = pendulum->x0 + pendulum->r1 * sin(pendulum->o1);
@@ -156,79 +200,4 @@ void saveScreenshot(int id, SDL_Renderer *renderer){
     SDL_RenderReadPixels(renderer, NULL, format, surface->pixels, surface->pitch);
     SDL_SaveBMP(surface, ("renders/" + std::to_string(id) + ".bmp").c_str());
     SDL_FreeSurface(surface);
-}
-
-
-int main(){
-
-    SDL_Window* window = NULL;
-    SDL_Renderer* renderer = NULL;
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        fprintf(stderr, "could not initialize sdl2: %s\n", SDL_GetError());
-        return 1;
-    }
-    if(SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)){
-        return 3;
-    }
-    if (window == NULL) {
-        fprintf(stderr, "could not create window: %s\n", SDL_GetError());
-        return 1;
-    }
-    bool run = true;
-    SDL_Event event;
-
-    Pendulum *pendulums = (Pendulum*)malloc(N * sizeof(Pendulum));
-    Pendulum *d_pendulums;
-
-
-    for (int i = 0; i < N; i++) {
-        int x = i % SCREEN_WIDTH;
-        int y = i / SCREEN_WIDTH;
-        pendulums[i] = Pendulum(
-            (x - SCREEN_WIDTH/2) * 2 * PI / SCREEN_WIDTH, 
-            (y - SCREEN_HEIGHT/2) * 2 * PI / SCREEN_HEIGHT
-        );
-    }
-    int blockSize, gridSize;
-    if (USE_CUDA) {
-        cudaMalloc(&d_pendulums, N * sizeof(Pendulum));
-        blockSize = 1024;
-        gridSize = (int)ceil((float)(N/blockSize));
-        cudaMemcpy(d_pendulums, pendulums, N * sizeof(Pendulum), cudaMemcpyHostToDevice);
-    }
-
-    int step = 0;
-    while(run && step < 200){
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
-
-        if (USE_CUDA) {
-            computeAccelerationsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
-            updatePendulumsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
-            cudaMemcpy(pendulums, d_pendulums, N * sizeof(Pendulum), cudaMemcpyDeviceToHost);
-        } else {
-            for (int i = 0; i < N; i++) {
-                computeAccelerations(&pendulums[i]);
-                updatePendulums(&pendulums[i]);
-            }
-        }
-
-        //computePositions(&pendulums[12300]);
-        //drawPendulum(&pendulums[12300], renderer);
-        drawFractal(pendulums, renderer);
-        SDL_RenderPresent(renderer);
-        if(SDL_PollEvent(&event) && event.type == SDL_QUIT){
-            run = false;
-        }
-
-        if (step % 3 == 0){
-            saveScreenshot(step, renderer);
-        }
-        step++;
-    }
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    free(pendulums);
-    cudaFree(d_pendulums);
-    return 0;
 }

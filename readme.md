@@ -14,4 +14,6 @@ We then for each timestamp compute the physics update on the GPU with CUDA.
 
 ## Inspiration
 
+Compared to the original implementation, I added a dampening factor to the simulation and add support for CUDA.
+
 [![inspiration](https://img.youtube.com/vi/n7JK4Ht8k8M/0.jpg)](https://www.youtube.com/watch?v=n7JK4Ht8k8M)
