@@ -3,8 +3,8 @@
 ########################################################################
 
 # Compiler settings - Can be customized.
-CC = g++
-CXXFLAGS = -std=c++11 -Wall
+CC = nvcc
+CXXFLAGS = -std=c++11
 LDFLAGS = -lSDL2 -lSDL2_gfx
 
 # Makefile settings - Can be customized.

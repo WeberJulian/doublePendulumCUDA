@@ -4,15 +4,18 @@
 #include <string>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL2_gfxPrimitives.h>
+#include <cuda_runtime.h>
 
 using namespace std;
 
-#define SCREEN_WIDTH 1200
-#define SCREEN_HEIGHT 640
+#define SCREEN_WIDTH 1440
+#define SCREEN_HEIGHT 1440
 #define PI 3.14159265
 #define g 1.0
+#define drag 0.9999
 
-class Pendulumn {
+
+class Pendulum {
     public:
         float r1 = 200;
         float r2 = 200;
@@ -31,20 +34,20 @@ class Pendulumn {
         float o1_a = 0;
         float o2_a = 0;
 
-        Pendulumn(float o1, float o2) {
+        Pendulum(float o1, float o2) {
             this->o1 = o1;
             this->o2 = o2;
         }
 };
 
-void computePositions(Pendulumn *pendulum) {
+void computePositions(Pendulum *pendulum) {
     pendulum->x1 = pendulum->x0 + pendulum->r1 * sin(pendulum->o1);
     pendulum->y1 = pendulum->y0 + pendulum->r1 * cos(pendulum->o1);
     pendulum->x2 = pendulum->x1 + pendulum->r2 * sin(pendulum->o2);
     pendulum->y2 = pendulum->y1 + pendulum->r2 * cos(pendulum->o2);
 }
 
-void computeAccelerations(Pendulumn *pendulum) {
+void computeAccelerations(Pendulum *pendulum) {
 
     pendulum->o1_a = (
         -g*(2*pendulum->m1+pendulum->m2)*sin(pendulum->o1) 
@@ -63,6 +66,48 @@ void computeAccelerations(Pendulumn *pendulum) {
     );
 }
 
+void updatePendulums(Pendulum *pendulum) {
+    pendulum->o1_v += pendulum->o1_a;
+    pendulum->o2_v += pendulum->o2_a;
+    pendulum->o1 += pendulum->o1_v;
+    pendulum->o2 += pendulum->o2_v;
+
+    pendulum->o1_v *= drag;
+    pendulum->o2_v *= drag;
+}
+
+Uint32 couleur(Uint8 r, Uint8 v, Uint8 b, Uint8 a){
+   return (int(a)<<24) + (int(b)<<16) + (int(v)<<8) + int(r);
+}
+
+Uint32 pickColor(float o1, float o2) {
+    int radius = 127;
+    return couleur(
+        127 + radius * cos(o1) * sin(o2),
+        127 + radius * sin(o1) * sin(o2),
+        127 + radius * cos(o2),
+        255
+    );
+}
+
+void drawPendulum(Pendulum *pendulum, SDL_Renderer *renderer) {
+    Uint32 color = pickColor(pendulum->o1, pendulum->o2);
+    aalineColor(renderer, pendulum->x0, pendulum->y0, pendulum->x1, pendulum->y1, color);
+    filledCircleColor(renderer, pendulum->x1, pendulum->y1, pendulum->m1, color);
+    aalineColor(renderer, pendulum->x1, pendulum->y1, pendulum->x2, pendulum->y2, color);
+    filledCircleColor(renderer, pendulum->x2, pendulum->y2, pendulum->m2, color);
+}
+
+void drawFractal(Pendulum *pendulums, SDL_Renderer *renderer) {
+    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+        int x = i % SCREEN_WIDTH;
+        int y = i / SCREEN_WIDTH;
+        Uint32 color = pickColor(pendulums[i].o1, pendulums[i].o2);
+        pixelColor(renderer, y, x, color);
+    }
+}
+
+
 int main(){
 
     SDL_Window* window = NULL;
@@ -80,27 +125,31 @@ int main(){
     }
     bool run = true;
     SDL_Event event;
-    Pendulumn pendulum(PI/2, PI/8);
+
+    Pendulum *pendulums = (Pendulum*)malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(Pendulum));
+
+    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+        int x = i % SCREEN_WIDTH;
+        int y = i / SCREEN_WIDTH;
+        pendulums[i] = Pendulum(
+            (x - SCREEN_WIDTH/2) * 2 * PI / SCREEN_WIDTH, 
+            (y - SCREEN_HEIGHT/2) * 2 * PI / SCREEN_HEIGHT
+        );
+    }
+
     while(run){
-        SDL_SetRenderDrawColor( renderer, 0, 0, 0, 0 );
-		SDL_RenderClear( renderer );
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
 
-        computeAccelerations(&pendulum);
-        pendulum.o1_v += pendulum.o1_a;
-        pendulum.o2_v += pendulum.o2_a;
-        pendulum.o1 += pendulum.o1_v;
-        pendulum.o2 += pendulum.o2_v;
+        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+            computeAccelerations(&pendulums[i]);
+            updatePendulums(&pendulums[i]);
+        }
 
-        pendulum.o1_v *= 0.9999;
-        pendulum.o2_v *= 0.9999;
-
-        computePositions(&pendulum);
-        aalineRGBA(renderer, pendulum.x0, pendulum.y0, pendulum.x1, pendulum.y1, 255, 255, 255, 255);
-        filledCircleRGBA(renderer, pendulum.x1, pendulum.y1, pendulum.m1, 255, 255, 255, 255);
-        aalineRGBA(renderer, pendulum.x1, pendulum.y1, pendulum.x2, pendulum.y2, 255, 255, 255, 255);
-        filledCircleRGBA(renderer, pendulum.x2, pendulum.y2, pendulum.m2, 255, 255, 255, 255);
+        computePositions(&pendulums[12300]);
+        //drawPendulum(&pendulums[12300], renderer);
+        drawFractal(pendulums, renderer);
         SDL_RenderPresent(renderer);
-        SDL_Delay(20);
         if(SDL_PollEvent(&event) && event.type == SDL_QUIT){
             run = false;
         }
