@@ -221,8 +221,9 @@ int main(){
             run = false;
         }
 
-        saveScreenshot(step, renderer);
-
+        if (step % 3 == 0){
+            saveScreenshot(step, renderer);
+        }
         step++;
     }
     SDL_DestroyWindow(window);
