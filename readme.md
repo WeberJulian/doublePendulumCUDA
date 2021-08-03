@@ -14,8 +14,4 @@ We then for each timestamp compute the physics update on the GPU with CUDA.
 
 ## Inspiration
 
-<iframe width="560" height="315"
-src="https://www.youtube.com/embed/n7JK4Ht8k8M" 
-frameborder="0" 
-allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" 
-allowfullscreen></iframe>
+[![inspiration](https://img.youtube.com/vi/n7JK4Ht8k8M/0.jpg)](https://www.youtube.com/watch?v=n7JK4Ht8k8M)
