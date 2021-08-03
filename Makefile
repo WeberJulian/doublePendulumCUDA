@@ -5,10 +5,10 @@
 # Compiler settings - Can be customized.
 CC = g++
 CXXFLAGS = -std=c++11 -Wall
-LDFLAGS = -lSDL2
+LDFLAGS = -lSDL2 -lSDL2_gfx
 
 # Makefile settings - Can be customized.
-APPNAME = myapp
+APPNAME = doublePendulum
 EXT = .cpp
 SRCDIR = src
 OBJDIR = obj
