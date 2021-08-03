@@ -8,8 +8,8 @@
 
 using namespace std;
 
-#define SCREEN_WIDTH 720
-#define SCREEN_HEIGHT 720
+#define SCREEN_WIDTH 512
+#define SCREEN_HEIGHT 512
 #define N SCREEN_HEIGHT * SCREEN_WIDTH
 #define PI 3.14159265
 #define g 1.0
@@ -150,6 +150,14 @@ void drawFractal(Pendulum *pendulums, SDL_Renderer *renderer) {
     }
 }
 
+void saveScreenshot(int id, SDL_Renderer *renderer){
+    const Uint32 format = SDL_PIXELFORMAT_ARGB8888;
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormat(0, SCREEN_WIDTH, SCREEN_HEIGHT, 32, format);
+    SDL_RenderReadPixels(renderer, NULL, format, surface->pixels, surface->pitch);
+    SDL_SaveBMP(surface, ("renders/" + std::to_string(id) + ".bmp").c_str());
+    SDL_FreeSurface(surface);
+}
+
 
 int main(){
 
@@ -189,7 +197,8 @@ int main(){
         cudaMemcpy(d_pendulums, pendulums, N * sizeof(Pendulum), cudaMemcpyHostToDevice);
     }
 
-    while(run){
+    int step = 0;
+    while(run && step < 200){
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderClear(renderer);
 
@@ -211,7 +220,10 @@ int main(){
         if(SDL_PollEvent(&event) && event.type == SDL_QUIT){
             run = false;
         }
-        
+
+        saveScreenshot(step, renderer);
+
+        step++;
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
