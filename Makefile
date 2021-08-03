@@ -9,7 +9,7 @@ LDFLAGS = -lSDL2 -lSDL2_gfx
 
 # Makefile settings - Can be customized.
 APPNAME = doublePendulum
-EXT = .cpp
+EXT = .cu
 SRCDIR = src
 OBJDIR = obj
 

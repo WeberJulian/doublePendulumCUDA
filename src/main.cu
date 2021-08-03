@@ -8,11 +8,14 @@
 
 using namespace std;
 
-#define SCREEN_WIDTH 1440
-#define SCREEN_HEIGHT 1440
+#define SCREEN_WIDTH 720
+#define SCREEN_HEIGHT 720
+#define N SCREEN_HEIGHT * SCREEN_WIDTH
 #define PI 3.14159265
 #define g 1.0
 #define drag 0.9999
+
+#define USE_CUDA true
 
 
 class Pendulum {
@@ -66,6 +69,31 @@ void computeAccelerations(Pendulum *pendulum) {
     );
 }
 
+__global__
+void computeAccelerationsCUDA(Pendulum *pendulums, int n) {
+
+    int id = blockIdx.x*blockDim.x+threadIdx.x;
+
+    if (id < n) {
+        pendulums[id].o1_a = (
+            -g*(2*pendulums[id].m1+pendulums[id].m2)*sinf(pendulums[id].o1) 
+            -pendulums[id].m2*g*sinf(pendulums[id].o1-2*pendulums[id].o2)
+            -2*sinf(pendulums[id].o1-pendulums[id].o2)*pendulums[id].m2
+            *(powf(pendulums[id].o2_v,2)*pendulums[id].r2 + powf(pendulums[id].o1_v,2)*pendulums[id].r1*cosf(pendulums[id].o1-pendulums[id].o2)))
+            /(pendulums[id].r1*(2*pendulums[id].m1+pendulums[id].m2-pendulums[id].m2*cosf(2*pendulums[id].o1-2*pendulums[id].o2)));
+
+        pendulums[id].o2_a = (
+            2*sinf(pendulums[id].o1-pendulums[id].o2)
+            *(
+                powf(pendulums[id].o1_v,2)*pendulums[id].r1*(pendulums[id].m1+pendulums[id].m2)
+                +g*(pendulums[id].m1+pendulums[id].m2)*cosf(pendulums[id].o1)
+                +powf(pendulums[id].o2_v,2)*pendulums[id].r2*pendulums[id].m2*cosf(pendulums[id].o1-pendulums[id].o2)
+            )/(pendulums[id].r2*(2*pendulums[id].m1+pendulums[id].m2-pendulums[id].m2*cosf(2*pendulums[id].o1-2*pendulums[id].o2)))
+        );
+    }
+
+}
+
 void updatePendulums(Pendulum *pendulum) {
     pendulum->o1_v += pendulum->o1_a;
     pendulum->o2_v += pendulum->o2_a;
@@ -74,6 +102,21 @@ void updatePendulums(Pendulum *pendulum) {
 
     pendulum->o1_v *= drag;
     pendulum->o2_v *= drag;
+}
+
+__global__
+void updatePendulumsCUDA(Pendulum *pendulums, int n) {
+    int id = blockIdx.x*blockDim.x+threadIdx.x;
+
+    if (id < n) {
+        pendulums[id].o1_v += pendulums[id].o1_a;
+        pendulums[id].o2_v += pendulums[id].o2_a;
+        pendulums[id].o1 += pendulums[id].o1_v;
+        pendulums[id].o2 += pendulums[id].o2_v;
+
+        pendulums[id].o1_v *= drag;
+        pendulums[id].o2_v *= drag;
+    }
 }
 
 Uint32 couleur(Uint8 r, Uint8 v, Uint8 b, Uint8 a){
@@ -99,7 +142,7 @@ void drawPendulum(Pendulum *pendulum, SDL_Renderer *renderer) {
 }
 
 void drawFractal(Pendulum *pendulums, SDL_Renderer *renderer) {
-    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+    for (int i = 0; i < N; i++) {
         int x = i % SCREEN_WIDTH;
         int y = i / SCREEN_WIDTH;
         Uint32 color = pickColor(pendulums[i].o1, pendulums[i].o2);
@@ -126,9 +169,11 @@ int main(){
     bool run = true;
     SDL_Event event;
 
-    Pendulum *pendulums = (Pendulum*)malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(Pendulum));
+    Pendulum *pendulums = (Pendulum*)malloc(N * sizeof(Pendulum));
+    Pendulum *d_pendulums;
 
-    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+
+    for (int i = 0; i < N; i++) {
         int x = i % SCREEN_WIDTH;
         int y = i / SCREEN_WIDTH;
         pendulums[i] = Pendulum(
@@ -136,17 +181,30 @@ int main(){
             (y - SCREEN_HEIGHT/2) * 2 * PI / SCREEN_HEIGHT
         );
     }
+    int blockSize, gridSize;
+    if (USE_CUDA) {
+        cudaMalloc(&d_pendulums, N * sizeof(Pendulum));
+        blockSize = 1024;
+        gridSize = (int)ceil((float)(N/blockSize));
+        cudaMemcpy(d_pendulums, pendulums, N * sizeof(Pendulum), cudaMemcpyHostToDevice);
+    }
 
     while(run){
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderClear(renderer);
 
-        for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
-            computeAccelerations(&pendulums[i]);
-            updatePendulums(&pendulums[i]);
+        if (USE_CUDA) {
+            computeAccelerationsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
+            updatePendulumsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
+            cudaMemcpy(pendulums, d_pendulums, N * sizeof(Pendulum), cudaMemcpyDeviceToHost);
+        } else {
+            for (int i = 0; i < N; i++) {
+                computeAccelerations(&pendulums[i]);
+                updatePendulums(&pendulums[i]);
+            }
         }
 
-        computePositions(&pendulums[12300]);
+        //computePositions(&pendulums[12300]);
         //drawPendulum(&pendulums[12300], renderer);
         drawFractal(pendulums, renderer);
         SDL_RenderPresent(renderer);
@@ -157,5 +215,7 @@ int main(){
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
+    free(pendulums);
+    cudaFree(d_pendulums);
     return 0;
 }
