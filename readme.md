@@ -1,9 +1,5 @@
 # Double Pendulum fractal
 
-## Result
-
-![](render.gif)
-
 ## How it works
 Each pixel correspond to a double pendulum and the pixel coordinate (x,y) are maped to initial angles (-pi,pi). 
 
@@ -11,6 +7,9 @@ The function `Uint32 pickColor(float o1, float o2)` associate to a combination o
 
 We then for each timestamp compute the physics update on the GPU with CUDA.
 
+## Result
+
+![](render.gif)
 
 ## Inspiration
 
