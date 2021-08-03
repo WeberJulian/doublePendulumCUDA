@@ -20,6 +20,8 @@ Compared to the original implementation, I added a dampening factor to the simul
 
 ## Benchmark
 
+Time taken to render 2000 frames at 512x512 resolution
+
 | device  | precision | time
 | ------------- | ------------- |------------- |
 | 5900x  | fp32  | 57.733s
