@@ -56,9 +56,21 @@ int main(){
 
     time_t flag = get_ms_now();
     int step = 0;
+    bool useLocktexture = false;
     while(run && step < MAX_STEP){
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderClear(renderer);
+
+        while(SDL_PollEvent(&event)){
+            if(( SDL_QUIT == event.type ) || ( SDL_KEYDOWN == event.type && SDL_SCANCODE_ESCAPE == event.key.keysym.scancode ) ){
+                run = false;
+                break;
+            }
+            if( SDL_KEYDOWN == event.type && SDL_SCANCODE_L == event.key.keysym.scancode ){
+                useLocktexture = !useLocktexture;
+                std::cout << "Using " << ( useLocktexture ? "SDL_LockTexture() + memcpy()" : "SDL_UpdateTexture()" ) << std::endl;
+            }
+        }
 
         if (USE_CUDA) {
             computeAccelerationsCUDA<<<gridSize, blockSize>>>(d_pendulums, N);
@@ -75,9 +87,6 @@ int main(){
         //drawPendulum(&pendulums[12300], renderer);
         drawFractal(pendulums, renderer);
         SDL_RenderPresent(renderer);
-        if(SDL_PollEvent(&event) && event.type == SDL_QUIT){
-            run = false;
-        }
 
         if (SAVE_OUTPUT){
             saveScreenshot(step, renderer);
