@@ -1,5 +1,5 @@
-#define SCREEN_WIDTH 512
-#define SCREEN_HEIGHT 512
+#define SCREEN_WIDTH 720
+#define SCREEN_HEIGHT 720
 #define N SCREEN_HEIGHT * SCREEN_WIDTH
 #define PI 3.14159265
 #define g 1.0
@@ -30,6 +30,7 @@ class Pendulum {
         }
 };
 
+time_t get_ms_now();
 void computePositions(Pendulum *pendulum);
 void computeAccelerations(Pendulum *pendulum);
 __global__ void computeAccelerationsCUDA(Pendulum *pendulums, int n);

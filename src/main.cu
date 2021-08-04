@@ -1,6 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
+// #include <chrono>
+#include <sys/time.h>
+#include <ctime>
 #include <string>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL2_gfxPrimitives.h>
@@ -51,6 +54,7 @@ int main(){
         cudaMemcpy(d_pendulums, pendulums, N * sizeof(Pendulum), cudaMemcpyHostToDevice);
     }
 
+    time_t flag = get_ms_now();
     int step = 0;
     while(run && step < MAX_STEP){
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -67,7 +71,7 @@ int main(){
             }
         }
 
-        //computePositions(&pendulums[12300]);
+        computePositions(&pendulums[12300]);
         //drawPendulum(&pendulums[12300], renderer);
         drawFractal(pendulums, renderer);
         SDL_RenderPresent(renderer);
@@ -79,12 +83,20 @@ int main(){
             saveScreenshot(step, renderer);
         }
         step++;
+        cout << "fps: " << 1000 / (get_ms_now()-flag) << endl;
+        flag = get_ms_now();
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
     free(pendulums);
     cudaFree(d_pendulums);
     return 0;
+}
+
+time_t get_ms_now(){
+    struct timeval now{};
+    gettimeofday(&now, nullptr);
+    return (now.tv_sec * 1000) + (now.tv_usec / 1000);
 }
 
 void computePositions(Pendulum *pendulum) {
