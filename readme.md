@@ -25,3 +25,6 @@ Time taken to render 2000 frames at 512x512 resolution
 | ------------- | ------------- |------------- |
 | 5900x  | fp32  | 113.067s
 | RTX 3090  | fp32  | 57.733s
+| RTX 3090*  | fp32  | 6.329s
+
+* with SDL interface disabled
