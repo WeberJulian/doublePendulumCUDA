@@ -4,6 +4,7 @@
 #define PI 3.14159265
 #define g 1.0
 #define drag 1
+#define dt 1
 #define radius 127
 
 class Pendulum {
@@ -42,3 +43,5 @@ Uint32 pickColor(float o1, float o2);
 void drawPendulum(Pendulum *pendulum, SDL_Renderer *renderer);
 void drawFractal(Pendulum *pendulums, SDL_Renderer *renderer);
 void saveScreenshot(int id, SDL_Renderer *renderer);
+__global__ void drawFractalTextureCUDA(unsigned char *pixels, Pendulum *pendulums, int n);
+void drawFractalTexture(unsigned char *pixels, Pendulum *pendulums);

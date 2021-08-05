@@ -16,32 +16,6 @@
 
 using namespace std;
 
-struct color {
-    unsigned char red = 0;
-    unsigned char green = 0;
-    unsigned char blue = 0;
-};
-
-void drawFractalTexture(unsigned char *pixels, Pendulum *pendulums) {
-    for (int i = 0; i < N; i++) {
-        pixels[i*4 + 0] = (unsigned char)(127 + radius * cos(pendulums[i].o2));
-        pixels[i*4 + 1] = (unsigned char)(127 + radius * sin(pendulums[i].o1) * sin(pendulums[i].o2));
-        pixels[i*4 + 2] = (unsigned char)(127 + radius * cos(pendulums[i].o1) * sin(pendulums[i].o2));
-        pixels[i*4 + 3] = SDL_ALPHA_OPAQUE;        
-    }
-}
-
-__global__
-void drawFractalTextureCUDA(unsigned char *pixels, Pendulum *pendulums, int n) {
-    int id = blockIdx.x*blockDim.x+threadIdx.x;
-    if (id < n) {
-        pixels[id*4 + 0] = (unsigned char)(127 + radius * cos(pendulums[id].o2));
-        pixels[id*4 + 1] = (unsigned char)(127 + radius * sin(pendulums[id].o1) * sin(pendulums[id].o2));
-        pixels[id*4 + 2] = (unsigned char)(127 + radius * cos(pendulums[id].o1) * sin(pendulums[id].o2));
-        pixels[id*4 + 3] = SDL_ALPHA_OPAQUE;        
-    }
-}
-
 int main(){
     if (SDL_Init(SDL_INIT_EVERYTHING) < 0) {
         fprintf(stderr, "could not initialize sdl2: %s\n", SDL_GetError());
@@ -209,10 +183,10 @@ void computeAccelerationsCUDA(Pendulum *pendulums, int n) {
 }
 
 void updatePendulums(Pendulum *pendulum) {
-    pendulum->o1_v += pendulum->o1_a;
-    pendulum->o2_v += pendulum->o2_a;
-    pendulum->o1 += pendulum->o1_v;
-    pendulum->o2 += pendulum->o2_v;
+    pendulum->o1_v += dt * pendulum->o1_a;
+    pendulum->o2_v += dt * pendulum->o2_a;
+    pendulum->o1 += dt * pendulum->o1_v;
+    pendulum->o2 += dt * pendulum->o2_v;
 
     pendulum->o1_v *= drag;
     pendulum->o2_v *= drag;
@@ -223,10 +197,10 @@ void updatePendulumsCUDA(Pendulum *pendulums, int n) {
     int id = blockIdx.x*blockDim.x+threadIdx.x;
 
     if (id < n) {
-        pendulums[id].o1_v += pendulums[id].o1_a;
-        pendulums[id].o2_v += pendulums[id].o2_a;
-        pendulums[id].o1 += pendulums[id].o1_v;
-        pendulums[id].o2 += pendulums[id].o2_v;
+        pendulums[id].o1_v += dt * pendulums[id].o1_a;
+        pendulums[id].o2_v += dt * pendulums[id].o2_a;
+        pendulums[id].o1 += dt * pendulums[id].o1_v;
+        pendulums[id].o2 += dt * pendulums[id].o2_v;
 
         pendulums[id].o1_v *= drag;
         pendulums[id].o2_v *= drag;
@@ -269,4 +243,24 @@ void saveScreenshot(int id, SDL_Renderer *renderer){
     SDL_RenderReadPixels(renderer, NULL, format, surface->pixels, surface->pitch);
     SDL_SaveBMP(surface, ("renders/" + std::to_string(id) + ".bmp").c_str());
     SDL_FreeSurface(surface);
+}
+
+void drawFractalTexture(unsigned char *pixels, Pendulum *pendulums) {
+    for (int i = 0; i < N; i++) {
+        pixels[i*4 + 0] = (unsigned char)(127 + radius * cos(pendulums[i].o2));
+        pixels[i*4 + 1] = (unsigned char)(127 + radius * sin(pendulums[i].o1) * sin(pendulums[i].o2));
+        pixels[i*4 + 2] = (unsigned char)(127 + radius * cos(pendulums[i].o1) * sin(pendulums[i].o2));
+        pixels[i*4 + 3] = SDL_ALPHA_OPAQUE;        
+    }
+}
+
+__global__
+void drawFractalTextureCUDA(unsigned char *pixels, Pendulum *pendulums, int n) {
+    int id = blockIdx.x*blockDim.x+threadIdx.x;
+    if (id < n) {
+        pixels[id*4 + 0] = (unsigned char)(127 + radius * cos(pendulums[id].o2));
+        pixels[id*4 + 1] = (unsigned char)(127 + radius * sin(pendulums[id].o1) * sin(pendulums[id].o2));
+        pixels[id*4 + 2] = (unsigned char)(127 + radius * cos(pendulums[id].o1) * sin(pendulums[id].o2));
+        pixels[id*4 + 3] = SDL_ALPHA_OPAQUE;        
+    }
 }
