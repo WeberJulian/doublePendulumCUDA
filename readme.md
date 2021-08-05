@@ -23,5 +23,5 @@ Time taken to render 2000 frames at 512x512 resolution
 
 | device  | precision | time
 | ------------- | ------------- |------------- |
-| 5900x  | fp32  | 113.067s
+| 5900x  | fp32  | 76.879s
 | RTX 3090  | fp32  | 5.502s
