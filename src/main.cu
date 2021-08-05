@@ -16,26 +16,71 @@
 
 using namespace std;
 
-int main(){
+struct color {
+    unsigned char red = 0;
+    unsigned char green = 0;
+    unsigned char blue = 0;
+};
 
-    SDL_Window* window = NULL;
-    SDL_Renderer* renderer = NULL;
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+void drawFractalTexture(unsigned char *pixels, Pendulum *pendulums) {
+    for (int i = 0; i < N; i++) {
+        pixels[i*4 + 0] = (unsigned char)(127 + radius * cos(pendulums[i].o2));
+        pixels[i*4 + 1] = (unsigned char)(127 + radius * sin(pendulums[i].o1) * sin(pendulums[i].o2));
+        pixels[i*4 + 2] = (unsigned char)(127 + radius * cos(pendulums[i].o1) * sin(pendulums[i].o2));
+        pixels[i*4 + 3] = SDL_ALPHA_OPAQUE;        
+    }
+}
+
+__global__
+void drawFractalTextureCUDA(unsigned char *pixels, Pendulum *pendulums, int n) {
+    int id = blockIdx.x*blockDim.x+threadIdx.x;
+    if (id < n) {
+        pixels[id*4 + 0] = (unsigned char)(127 + radius * cos(pendulums[id].o2));
+        pixels[id*4 + 1] = (unsigned char)(127 + radius * sin(pendulums[id].o1) * sin(pendulums[id].o2));
+        pixels[id*4 + 2] = (unsigned char)(127 + radius * cos(pendulums[id].o1) * sin(pendulums[id].o2));
+        pixels[id*4 + 3] = SDL_ALPHA_OPAQUE;        
+    }
+}
+
+int main(){
+    if (SDL_Init(SDL_INIT_EVERYTHING) < 0) {
         fprintf(stderr, "could not initialize sdl2: %s\n", SDL_GetError());
         return 1;
     }
-    if(SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)){
-        return 3;
+    SDL_Window* window = SDL_CreateWindow(
+        "Double Pendulum Fractal",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        SDL_WINDOW_SHOWN
+    );
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_RendererInfo info;
+    SDL_GetRendererInfo( renderer, &info );
+    std::cout << "Renderer name: " << info.name << std::endl;
+    std::cout << "Texture formats: " << std::endl;
+    for( Uint32 i = 0; i < info.num_texture_formats; i++ )
+    {
+        std::cout << SDL_GetPixelFormatName( info.texture_formats[i] ) << std::endl;
     }
-    if (window == NULL) {
-        fprintf(stderr, "could not create window: %s\n", SDL_GetError());
-        return 1;
-    }
+
+    SDL_Texture* texture = SDL_CreateTexture(
+        renderer,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        SCREEN_WIDTH, SCREEN_HEIGHT
+    );
+    //std::vector<unsigned char> pixels(SCREEN_WIDTH * SCREEN_HEIGHT * 4, 0);
+    unsigned char *pixels = (unsigned char*)malloc(N * sizeof(unsigned char) * 4);
+
+
     bool run = true;
     SDL_Event event;
 
     Pendulum *pendulums = (Pendulum*)malloc(N * sizeof(Pendulum));
     Pendulum *d_pendulums;
+    unsigned char *d_pixels;
 
 
     for (int i = 0; i < N; i++) {
@@ -49,6 +94,7 @@ int main(){
     int blockSize, gridSize;
     if (USE_CUDA) {
         cudaMalloc(&d_pendulums, N * sizeof(Pendulum));
+        cudaMalloc(&d_pixels, N * sizeof(unsigned char) * 4);
         blockSize = 1024;
         gridSize = (int)ceil((float)(N/blockSize));
         cudaMemcpy(d_pendulums, pendulums, N * sizeof(Pendulum), cudaMemcpyHostToDevice);
@@ -56,19 +102,14 @@ int main(){
 
     time_t flag = get_ms_now();
     int step = 0;
-    bool useLocktexture = false;
     while(run && step < MAX_STEP){
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(renderer);
 
         while(SDL_PollEvent(&event)){
             if(( SDL_QUIT == event.type ) || ( SDL_KEYDOWN == event.type && SDL_SCANCODE_ESCAPE == event.key.keysym.scancode ) ){
                 run = false;
                 break;
-            }
-            if( SDL_KEYDOWN == event.type && SDL_SCANCODE_L == event.key.keysym.scancode ){
-                useLocktexture = !useLocktexture;
-                std::cout << "Using " << ( useLocktexture ? "SDL_LockTexture() + memcpy()" : "SDL_UpdateTexture()" ) << std::endl;
             }
         }
 
@@ -85,15 +126,23 @@ int main(){
 
         computePositions(&pendulums[12300]);
         //drawPendulum(&pendulums[12300], renderer);
-        drawFractal(pendulums, renderer);
+        //drawFractal(pendulums, renderer);
+        if (USE_CUDA) {
+            drawFractalTextureCUDA<<<gridSize, blockSize>>>(d_pixels, d_pendulums, N);
+            cudaMemcpy(pixels, d_pixels, N * sizeof(unsigned char) * 4, cudaMemcpyDeviceToHost);
+        } else {
+            drawFractalTexture(pixels, pendulums);
+        }
+        cout << "steps per seconds: " << 1000 / (get_ms_now()-flag) << endl;
+        flag = get_ms_now();
+        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_UpdateTexture(texture, NULL, pixels, SCREEN_WIDTH * 4);
         SDL_RenderPresent(renderer);
 
         if (SAVE_OUTPUT){
             saveScreenshot(step, renderer);
         }
         step++;
-        cout << "fps: " << 1000 / (get_ms_now()-flag) << endl;
-        flag = get_ms_now();
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -189,7 +238,6 @@ Uint32 couleur(Uint8 r, Uint8 v, Uint8 b, Uint8 a){
 }
 
 Uint32 pickColor(float o1, float o2) {
-    int radius = 127;
     return couleur(
         127 + radius * cos(o1) * sin(o2),
         127 + radius * sin(o1) * sin(o2),

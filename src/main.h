@@ -1,9 +1,10 @@
-#define SCREEN_WIDTH 720
-#define SCREEN_HEIGHT 720
+#define SCREEN_WIDTH 512
+#define SCREEN_HEIGHT 512
 #define N SCREEN_HEIGHT * SCREEN_WIDTH
 #define PI 3.14159265
 #define g 1.0
-#define drag 0.9999
+#define drag 1
+#define radius 127
 
 class Pendulum {
     public:
