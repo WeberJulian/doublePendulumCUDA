@@ -18,7 +18,7 @@
 #define PI 3.14159265
 #define g 1.0
 #define drag 1
-#define dt 0.3
+#define dt 0.3 // Set a lower value to have a more accurate simulation
 #define radius 127
 
 using namespace std;
