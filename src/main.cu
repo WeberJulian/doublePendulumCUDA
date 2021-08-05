@@ -1,7 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
-// #include <chrono>
 #include <sys/time.h>
 #include <ctime>
 #include <string>
@@ -12,7 +11,15 @@
 
 #define USE_CUDA true
 #define SAVE_OUTPUT false
-#define MAX_STEP 2000
+#define MAX_STEP 200000
+#define SCREEN_WIDTH 1080
+#define SCREEN_HEIGHT 1080
+#define N SCREEN_HEIGHT * SCREEN_WIDTH
+#define PI 3.14159265
+#define g 1.0
+#define drag 1
+#define dt 0.3
+#define radius 127
 
 using namespace std;
 
